@@ -11,7 +11,7 @@ struct ThreadContext {
 };
 
 void foo(ThreadContext* tc) {
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 10000; ++i) {
         // old_value isn't used in this example, but will be necessary
         // in the exercise
         int old_value = (*(tc->atomic_counter))++;
