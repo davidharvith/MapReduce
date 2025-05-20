@@ -49,7 +49,8 @@ struct JobFrameWork {
     std::atomic<size_t> reduceIndex{0};//for reduce phase
     std::mutex outputMutex;
     std::mutex shuffleMutex;
-    static std::mutex joinMutex; 
+    // static std::mutex joinMutex; 
+    std::mutex joinMutex; // added this line
     Barrier* barrier = nullptr;
 
     // Job state

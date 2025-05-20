@@ -1,6 +1,6 @@
 #include "GeneralContext.h"
 
-std::mutex JobFrameWork::joinMutex;
+// std::mutex JobFrameWork::joinMutex;
 
 JobFrameWork::JobFrameWork(const MapReduceClient& client,
                            const InputVec& inputVec,
@@ -11,7 +11,7 @@ JobFrameWork::JobFrameWork(const MapReduceClient& client,
     intermediateVectors.resize(numThreads);
     threadContexts.resize(numThreads, nullptr);
     // INITIALIZE STATE FOR MAP PHASE
-    const uint64_t init_state = STATE_PACK(MAP_STAGE, 0, inputVec.size());
+    const uint64_t init_state = STATE_PACK(UNDEFINED_STAGE, 0, inputVec.size()); //  added this line
     state.store(init_state);
 
 

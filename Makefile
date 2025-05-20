@@ -21,7 +21,7 @@ OSMLIB   =  libMapReduceFramework.a
 TAR = tar
 TARNAME  = ex2.tar
 TARFLAGS = -cvf
-TARSRCS  = $(LIBSRC) uthreads_errors.h UserThread.h Makefile README
+TARSRCS = $(LIBSRC) Barrier.h GeneralContext.h Makefile README
 
 all: $(OSMLIB)
 
