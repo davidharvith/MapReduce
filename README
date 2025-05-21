@@ -3,15 +3,13 @@ Nitzan Bukchin (208939405), David Harvith (206124281)
 EX: 3
 
 FILES:  
-MapReduceFramework.h -- Declaration of the MapReduce framework API (unchanged).
-MapReduceFramework.cpp -- Implementation of the MapReduce framework API.  
-GeneralContext.h -- Declaration of internal context structures. 
-GeneralContext.cpp -- Definitions for job-wide and per-thread state.  
-Barrier.h -- Declaration of the Barrier class.  
-Barrier.cpp -- Implementation of the Barrier class for thread synchronization.  
-MapReduceClient.h -- Declaration of the client interface (unchanged).  
-errors.h -- Error message constants.  
-Makefile -- Builds libMapReduceFramework.a from all .cpp sources.
+- MapReduceFramework.cpp -- Implementation of the MapReduce framework API.  
+- GeneralContext.h -- Declaration of internal context structures. 
+- GeneralContext.cpp -- Definitions for job-wide and per-thread state.  
+- Barrier.h -- Declaration of the Barrier class.  
+- Barrier.cpp -- Implementation of the Barrier class for thread synchronization.  
+- errors.h -- Error message constants.  
+- Makefile -- Builds libMapReduceFramework.a from all .cpp sources.
 
 REMARKS:  
 - Each thread performs Map → Sort, waits at a barrier,  
@@ -22,3 +20,11 @@ REMARKS:
 - A per-job mutex is used for join to ensure thread safety and avoid global locks.
 
 ANSWERS:
+
+Q1:
+Here are answers to theoreical questions
+if there were such questions in the exercise.
+
+Q2:
+Here are answers to theoreical questions
+if there were such questions in the exercise.
