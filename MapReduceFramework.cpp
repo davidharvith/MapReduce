@@ -41,13 +41,13 @@ JobHandle startMapReduceJob(const MapReduceClient& client,
         job = new JobFrameWork(client, inputVec, outputVec, multiThreadLevel);
         job->barrier = new Barrier(multiThreadLevel);
     } catch (const std::bad_alloc&) {
-        std::cerr << BAD_ALLOCATION;
+        std::cout << BAD_ALLOCATION;
         exit(1);
     }
     try {
         job->threadContexts.resize(multiThreadLevel);
     } catch (const std::bad_alloc&) {
-        std::cerr << BAD_ALLOCATION;
+        std::cout << BAD_ALLOCATION;
         exit(1);
     }
     try {
@@ -56,7 +56,7 @@ JobHandle startMapReduceJob(const MapReduceClient& client,
             job->threads.emplace_back(std::thread(threadMain, job->threadContexts[i]));
         }
     } catch (...) {
-        std::cerr << THREAD_CREATION_ERROR;
+        std::cout << THREAD_CREATION_ERROR;
         delete job;
         exit(1);
     }
