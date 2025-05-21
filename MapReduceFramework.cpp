@@ -106,15 +106,25 @@ void threadMain(ThreadContext* context) {
     }
 
     // Sort phase
-    std::sort(
-        context->intermediateVec->begin(),
-        context->intermediateVec->end(),
-        [](const IntermediatePair& a, const IntermediatePair& b) {
-            return *(a.first) < *(b.first);
-        }
-    );
+    try {
+        std::sort(
+            context->intermediateVec->begin(),
+            context->intermediateVec->end(),
+            [](const IntermediatePair& a, const IntermediatePair& b) {
+                return *(a.first) < *(b.first);
+            }
+        );
+    } catch (const std::system_error&) {
+        std::cout << SORT_ERROR;
+        exit(1);
+    }
 
-    job->barrier->barrier(); // Wait for all threads to finish map+sort
+    try {
+        job->barrier->barrier(); // Wait for all threads to finish map+sort
+    } catch (const std::system_error&) {
+        std::cout << BARRIER_ERROR;
+        exit(1);
+    }
 
     // Shuffle phase (only thread 0)
     if (context->threadId == 0) {
@@ -122,50 +132,124 @@ void threadMain(ThreadContext* context) {
         for (auto& vec : job->intermediateVectors) {
             totalPairs += vec.size();
         }
-        job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
 
-        std::map<K2*, std::vector<IntermediatePair>, K2PtrLess> grouped;
-        for (auto& vec : job->intermediateVectors) {
-            for (auto& pair : vec) {
-                grouped[pair.first].push_back(pair);
-                job->state.fetch_add(1ULL << 2); // processed++
+        // Handle empty input case
+        if (totalPairs == 0) {
+            try {
+                job->state.store(STATE_PACK(REDUCE_STAGE, 0, 0));
+                job->shuffledVectors.clear(); // Ensure shuffledVectors is empty
+            } catch (const std::system_error&) {
+                std::cout << STATE_UPDATE_ERROR;
+                exit(1);
             }
-        }
-        job->shuffledVectors.clear();
-        for (auto& entry : grouped) {
-            job->shuffledVectors.push_back(std::move(entry.second));
+        } else {
+            try {
+                job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
+            } catch (const std::system_error&) {
+                std::cout << STATE_UPDATE_ERROR;
+                exit(1);
+            }
+
+            std::map<K2*, std::vector<IntermediatePair>, K2PtrLess> grouped;
+            try {
+                for (auto& vec : job->intermediateVectors) {
+                    for (auto& pair : vec) {
+                        grouped[pair.first].push_back(pair);
+                        uint64_t old_state = job->state.load();
+                        while (true) {
+                            unsigned stage;
+                            size_t processed, total;
+                            STATE_UNPACK(stage, processed, total, old_state);
+                            uint64_t new_state = STATE_PACK(stage, processed + 1, total);
+                            if (job->state.compare_exchange_weak(old_state, new_state)) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (const std::system_error&) {
+                std::cout << SHUFFLE_ERROR;
+                exit(1);
+            }
+
+            try {
+                job->shuffledVectors.clear();
+                for (auto& entry : grouped) {
+                    job->shuffledVectors.push_back(std::move(entry.second));
+                }
+            } catch (const std::system_error&) {
+                std::cout << VECTOR_OPERATION_ERROR;
+                exit(1);
+            }
         }
     }
 
-    job->barrier->barrier(); // Wait for shuffle
+    try {
+        job->barrier->barrier(); // Wait for shuffle
+    } catch (const std::system_error&) {
+        std::cout << BARRIER_ERROR;
+        exit(1);
+    }
 
     // Reduce phase
     if (context->threadId == 0) {
-        job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->shuffledVectors.size()));
+        try {
+            job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->shuffledVectors.size()));
+        } catch (const std::system_error&) {
+            std::cout << STATE_UPDATE_ERROR;
+            exit(1);
+        }
     }
-    job->barrier->barrier();
+
+    try {
+        job->barrier->barrier();
+    } catch (const std::system_error&) {
+        std::cout << BARRIER_ERROR;
+        exit(1);
+    }
+
+    // If no shuffled vectors, we're done
+    if (job->shuffledVectors.empty()) {
+        try {
+            job->barrier->barrier(); // Wait for all threads to finish reduce
+        } catch (const std::system_error&) {
+            std::cout << BARRIER_ERROR;
+            exit(1);
+        }
+        return;
+    }
 
     while (true) {
         size_t idx = job->reduceIndex.fetch_add(1);
         if (idx >= job->shuffledVectors.size()) break;
         
-        // Process the reduce FIRST
-        job->client.reduce(&job->shuffledVectors[idx], context);
+        try {
+            // Process the reduce FIRST
+            job->client.reduce(&job->shuffledVectors[idx], context);
 
-        // THEN update the state
-        uint64_t old_state = job->state.load();
-        while (true) {
-            unsigned stage;
-            size_t processed, total;
-            STATE_UNPACK(stage, processed, total, old_state);
-            uint64_t new_state = STATE_PACK(stage, processed + 1, total);
-            if (job->state.compare_exchange_weak(old_state, new_state)) {
-                break;
+            // THEN update the state
+            uint64_t old_state = job->state.load();
+            while (true) {
+                unsigned stage;
+                size_t processed, total;
+                STATE_UNPACK(stage, processed, total, old_state);
+                uint64_t new_state = STATE_PACK(stage, processed + 1, total);
+                if (job->state.compare_exchange_weak(old_state, new_state)) {
+                    break;
+                }
             }
+        } catch (const std::system_error&) {
+            std::cout << REDUCE_ERROR;
+            exit(1);
         }
     }
 
-    job->barrier->barrier(); // Wait for all threads to finish reduce
+    try {
+        job->barrier->barrier(); // Wait for all threads to finish reduce
+    } catch (const std::system_error&) {
+        std::cout << BARRIER_ERROR;
+        exit(1);
+    }
 }
 
 
