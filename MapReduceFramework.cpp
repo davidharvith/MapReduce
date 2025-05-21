@@ -71,8 +71,10 @@ void threadMain(ThreadContext* context) {
     {
         uint64_t old = job->state.load(std::memory_order_relaxed);
         if ((old & 0x3ULL) == UNDEFINED_STAGE) {          // stage bits == 0
-            unsigned stage; size_t processed, total;
+            unsigned stage; 
+            size_t processed, total;
             STATE_UNPACK(stage, processed, total, old);
+            (void)stage;
             uint64_t desired = STATE_PACK(MAP_STAGE, processed, total);
             job->state.compare_exchange_strong(old, desired);
         }
@@ -122,8 +124,6 @@ void threadMain(ThreadContext* context) {
         }
         job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
 
-        job->totalIntermediatePairs = totalPairs;   //  added this line
-
         std::map<K2*, std::vector<IntermediatePair>, K2PtrLess> grouped;
         for (auto& vec : job->intermediateVectors) {
             for (auto& pair : vec) {
@@ -141,8 +141,7 @@ void threadMain(ThreadContext* context) {
 
     // Reduce phase
     if (context->threadId == 0) {
-        // job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->shuffledVectors.size()));
-        job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->totalIntermediatePairs)); // added this line
+        job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->shuffledVectors.size()));
     }
     job->barrier->barrier();
 
@@ -159,8 +158,7 @@ void threadMain(ThreadContext* context) {
             unsigned stage;
             size_t processed, total;
             STATE_UNPACK(stage, processed, total, old_state);
-            // uint64_t new_state = STATE_PACK(stage, processed + 1, total);
-            uint64_t new_state = STATE_PACK(stage,processed + job->shuffledVectors[idx].size(), total); // added this line
+            uint64_t new_state = STATE_PACK(stage, processed + 1, total);
             if (job->state.compare_exchange_weak(old_state, new_state)) {
                 break;
             }

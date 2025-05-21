@@ -11,8 +11,8 @@ LIBOBJ   = $(LIBSRC:.cpp=.o)
 
 # Include paths and flags
 INCS     = -I.
-CFLAGS   = -Wall -std=c++11 -g $(INCS)
-CXXFLAGS = -Wall -std=c++11 -g $(INCS)
+CFLAGS   = -Wall -Wextra -std=c++20 -g $(INCS)
+CXXFLAGS = -Wall -Wextra -std=c++20 -g $(INCS)
 
 # Library name
 OSMLIB   =  libMapReduceFramework.a
@@ -21,7 +21,7 @@ OSMLIB   =  libMapReduceFramework.a
 TAR = tar
 TARNAME  = ex3.tar
 TARFLAGS = -cvf
-TARSRCS = $(LIBSRC) Barrier.h GeneralContext.h Makefile README
+TARSRCS = $(LIBSRC) Barrier.h GeneralContext.h errors.h Makefile README
 
 all: $(OSMLIB)
 
@@ -40,3 +40,5 @@ depend:
 
 tar:
 	$(TAR) $(TARFLAGS) $(TARNAME) $(TARSRCS)
+
+.PHONY: all clean depend tar
