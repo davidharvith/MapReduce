@@ -19,7 +19,7 @@ OSMLIB   =  libMapReduceFramework.a
 
 # Tarball settings
 TAR = tar
-TARNAME  = ex2.tar
+TARNAME  = ex3.tar
 TARFLAGS = -cvf
 TARSRCS = $(LIBSRC) Barrier.h GeneralContext.h Makefile README
 
