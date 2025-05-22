@@ -55,6 +55,10 @@ JobHandle startMapReduceJob(const MapReduceClient& client,
             job->threadContexts[i] = new ThreadContext(i, job);
             job->threads.emplace_back(std::thread(threadMain, job->threadContexts[i]));
         }
+    } catch (const std::bad_alloc&) {
+        std::cout << BAD_ALLOCATION;
+        delete job;
+        exit(1);
     } catch (...) {
         std::cout << THREAD_CREATION_ERROR;
         delete job;
@@ -114,7 +118,7 @@ void threadMain(ThreadContext* context) {
                 return *(a.first) < *(b.first);
             }
         );
-    } catch (const std::system_error&) {
+    } catch (...) {
         std::cout << SORT_ERROR;
         exit(1);
     }
@@ -135,20 +139,10 @@ void threadMain(ThreadContext* context) {
 
         // Handle empty input case
         if (totalPairs == 0) {
-            try {
-                job->state.store(STATE_PACK(REDUCE_STAGE, 0, 0));
-                job->shuffledVectors.clear(); // Ensure shuffledVectors is empty
-            } catch (const std::system_error&) {
-                std::cout << STATE_UPDATE_ERROR;
-                exit(1);
-            }
+            job->state.store(STATE_PACK(REDUCE_STAGE, 0, 0));
+            job->shuffledVectors.clear(); // Ensure shuffledVectors is empty
         } else {
-            try {
-                job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
-            } catch (const std::system_error&) {
-                std::cout << STATE_UPDATE_ERROR;
-                exit(1);
-            }
+            job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
 
             std::map<K2*, std::vector<IntermediatePair>, K2PtrLess> grouped;
             try {
@@ -167,7 +161,10 @@ void threadMain(ThreadContext* context) {
                         }
                     }
                 }
-            } catch (const std::system_error&) {
+            } catch (const std::bad_alloc&) {
+                std::cout << BAD_ALLOCATION;
+                exit(1);
+            } catch (...) {
                 std::cout << SHUFFLE_ERROR;
                 exit(1);
             }
@@ -177,7 +174,10 @@ void threadMain(ThreadContext* context) {
                 for (auto& entry : grouped) {
                     job->shuffledVectors.push_back(std::move(entry.second));
                 }
-            } catch (const std::system_error&) {
+            } catch (const std::bad_alloc&) {
+                std::cout << BAD_ALLOCATION;
+                exit(1);
+            } catch (...) {
                 std::cout << VECTOR_OPERATION_ERROR;
                 exit(1);
             }
@@ -193,12 +193,7 @@ void threadMain(ThreadContext* context) {
 
     // Reduce phase
     if (context->threadId == 0) {
-        try {
-            job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->shuffledVectors.size()));
-        } catch (const std::system_error&) {
-            std::cout << STATE_UPDATE_ERROR;
-            exit(1);
-        }
+        job->state.store(STATE_PACK(REDUCE_STAGE, 0, job->shuffledVectors.size()));
     }
 
     try {
@@ -238,7 +233,7 @@ void threadMain(ThreadContext* context) {
                     break;
                 }
             }
-        } catch (const std::system_error&) {
+        } catch (...) {
             std::cout << REDUCE_ERROR;
             exit(1);
         }
