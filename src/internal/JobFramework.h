@@ -25,6 +25,7 @@ struct JobFramework {
 
     std::vector<std::vector<IntermediatePair>> intermediateVectors;
     std::vector<std::vector<IntermediatePair>> shuffledVectors;
+    std::atomic<size_t> shuffleProgress{0};
 
     std::atomic<size_t> inputIndex{0};
     std::atomic<size_t> reduceIndex{0};

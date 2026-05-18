@@ -1,0 +1,6 @@
+# Parallel shuffle via std::map tree merge (intermediate step)
+threads,inputs,time_s,inputs_per_sec
+1,500000,0.119864,4.17138e+06
+2,500000,0.117309,4.26224e+06
+4,500000,0.129661,3.8562e+06
+8,500000,0.144768,3.4538e+06

@@ -1,4 +1,4 @@
-.PHONY: all build test clean bench
+.PHONY: all build test clean bench bench-sweep word-count-demo
 
 BUILD_DIR ?= build
 
@@ -16,6 +16,13 @@ bench: build
 	./$(BUILD_DIR)/bench --threads 2
 	./$(BUILD_DIR)/bench --threads 4
 	./$(BUILD_DIR)/bench --threads 8
+
+bench-sweep: build
+	chmod +x benchmarks/run_sweep.sh
+	./benchmarks/run_sweep.sh
+
+word-count-demo: build
+	./$(BUILD_DIR)/word_count examples/sample.txt --top 15 --threads 4
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -1,9 +1,11 @@
 #include "Phases.h"
 
 #include <algorithm>
-#include <map>
+#include <utility>
+#include <vector>
 
 #include "JobFramework.h"
+#include "ShuffleTypes.h"
 #include "State.h"
 
 #include "Barrier.h"
@@ -11,22 +13,58 @@
 
 namespace {
 
-struct K2PtrLess {
-    bool operator()(const K2* a, const K2* b) const { return *a < *b; }
-};
+void mergeSortedRuns(std::vector<IntermediatePair>& dest, std::vector<IntermediatePair>& src) {
+    if (src.empty()) {
+        return;
+    }
+    if (dest.empty()) {
+        dest = std::move(src);
+        return;
+    }
+
+    std::vector<IntermediatePair> merged;
+    merged.reserve(dest.size() + src.size());
+    std::merge(dest.begin(),
+               dest.end(),
+               src.begin(),
+               src.end(),
+               std::back_inserter(merged),
+               [](const IntermediatePair& a, const IntermediatePair& b) {
+                   return *(a.first) < *(b.first);
+               });
+    dest = std::move(merged);
+    src.clear();
+}
+
+void groupSortedIntoShuffled(const std::vector<IntermediatePair>& sorted,
+                             std::vector<std::vector<IntermediatePair>>& groups,
+                             std::atomic<size_t>* progress) {
+    groups.clear();
+    if (sorted.empty()) {
+        return;
+    }
+
+    groups.emplace_back();
+    groups.back().push_back(sorted.front());
+    if (progress) {
+        progress->fetch_add(1, std::memory_order_relaxed);
+    }
+
+    for (size_t i = 1; i < sorted.size(); ++i) {
+        const IntermediatePair& pair = sorted[i];
+        if (K2PtrLess{}(groups.back().back().first, pair.first)) {
+            groups.emplace_back();
+        }
+        groups.back().push_back(pair);
+        if (progress) {
+            progress->fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+}
 
 }  // namespace
 
 bool syncBarrier(JobFramework* job) {
-    if (job->failed.load(std::memory_order_acquire)) {
-        try {
-            job->barrier->barrier();
-            return true;
-        } catch (const std::system_error&) {
-            job->setError(JOB_ERR_BARRIER);
-            return false;
-        }
-    }
     try {
         job->barrier->barrier();
         return true;
@@ -78,7 +116,8 @@ bool runSortPhase(ThreadContext* context) {
 
 bool runShufflePhase(ThreadContext* context) {
     JobFramework* job = context->job;
-    if (context->threadId != 0 || job->failed.load(std::memory_order_acquire)) {
+    const int tid = context->threadId;
+    if (job->failed.load(std::memory_order_acquire)) {
         return true;
     }
 
@@ -88,42 +127,62 @@ bool runShufflePhase(ThreadContext* context) {
     }
 
     if (totalPairs == 0) {
-        job->state.store(STATE_PACK(REDUCE_STAGE, 0, 0));
-        job->shuffledVectors.clear();
+        if (tid == 0) {
+            job->state.store(STATE_PACK(REDUCE_STAGE, 0, 0));
+            job->shuffledVectors.clear();
+        }
         return true;
     }
 
-    job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
+    if (tid == 0) {
+        job->shuffleProgress.store(0, std::memory_order_relaxed);
+        job->state.store(STATE_PACK(SHUFFLE_STAGE, 0, totalPairs));
+    }
 
-    std::map<K2*, std::vector<IntermediatePair>, K2PtrLess> grouped;
-    try {
-        for (auto& vec : job->intermediateVectors) {
-            for (auto& pair : vec) {
-                grouped[pair.first].push_back(pair);
-                tryIncrementProgress(job->state);
+    std::vector<IntermediatePair>& local = job->intermediateVectors[tid];
+
+    for (int stride = 1; stride < job->numThreads; stride <<= 1) {
+        if (tid % (2 * stride) == 0) {
+            const int partner = tid + stride;
+            if (partner < job->numThreads) {
+                try {
+                    mergeSortedRuns(local, job->intermediateVectors[partner]);
+                } catch (const std::bad_alloc&) {
+                    job->setError(JOB_ERR_BAD_ALLOCATION);
+                    return false;
+                } catch (...) {
+                    job->setError(JOB_ERR_SHUFFLE);
+                    return false;
+                }
             }
         }
-    } catch (const std::bad_alloc&) {
-        job->setError(JOB_ERR_BAD_ALLOCATION);
-        return false;
-    } catch (...) {
-        job->setError(JOB_ERR_SHUFFLE);
-        return false;
+        if (!syncBarrier(job)) {
+            return false;
+        }
+        if (tid == 0) {
+            const size_t done =
+                std::min(job->shuffleProgress.load(std::memory_order_relaxed), totalPairs);
+            job->state.store(STATE_PACK(SHUFFLE_STAGE, done, totalPairs));
+        }
     }
 
-    try {
-        job->shuffledVectors.clear();
-        for (auto& entry : grouped) {
-            job->shuffledVectors.push_back(std::move(entry.second));
+    if (tid == 0) {
+        try {
+            groupSortedIntoShuffled(local, job->shuffledVectors, &job->shuffleProgress);
+            job->state.store(STATE_PACK(SHUFFLE_STAGE, totalPairs, totalPairs));
+        } catch (const std::bad_alloc&) {
+            job->setError(JOB_ERR_BAD_ALLOCATION);
+            return false;
+        } catch (...) {
+            job->setError(JOB_ERR_VECTOR);
+            return false;
         }
-        return true;
-    } catch (const std::bad_alloc&) {
-        job->setError(JOB_ERR_BAD_ALLOCATION);
-        return false;
-    } catch (...) {
-        job->setError(JOB_ERR_VECTOR);
+    }
+
+    if (!syncBarrier(job)) {
         return false;
     }
+    return true;
 }
 
 void beginReduceStage(JobFramework* job) {

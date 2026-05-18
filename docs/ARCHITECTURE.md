@@ -5,14 +5,14 @@
 1. **Map** — threads claim input records via `inputIndex.fetch_add(1)`. Each thread writes to its own `intermediateVectors[threadId]` (lock-free via `emit2`).
 2. **Sort** — each thread sorts its local intermediate vector by `*K2` (value comparison).
 3. **Barrier** — all threads must finish map+sort before shuffle.
-4. **Shuffle** — only thread 0 merges all sorted runs into groups with the same K2 key, using `std::map<K2*, vector, K2PtrLess>`.
+4. **Shuffle** — parallel **merge of sorted runs**: each thread holds a sorted run; runs are combined with `std::merge` in a tree (`log₂ N` barriers). Thread 0 scans the fully merged sorted stream and groups equivalent keys into `shuffledVectors`.
 5. **Barrier** — all threads wait for shuffle to finish.
 6. **Reduce** — threads claim groups via `reduceIndex.fetch_add(1)` and call client `reduce`.
 7. **Barrier** — final synchronization before `waitForJob` returns.
 
 ## Shuffle key semantics
 
-`K2PtrLess` compares `*a < *b`, not pointer addresses. Two distinct `K2*` objects with equal values land in the same shuffle group. This matches sort order (`*(a.first) < *(b.first)`).
+Sort and merge use `*(a.first) < *(b.first)`. Grouping starts a new bucket when `K2PtrLess` holds between the previous key and the current key (equivalent keys stay in one group).
 
 ## Packed job state
 
@@ -24,16 +24,12 @@
 | 2–32 | `processed` (31 bits, max ~2e9) |
 | 33–63 | `total` (31 bits) |
 
-`getJobState` reports `percentage = 100 * min(processed, total) / total` (or 100% when `total == 0`).
-
-Shuffle progress runs on thread 0 only; at high thread counts this becomes the Amdahl bottleneck.
-
 ## Error handling
 
-Failures set `JobFramework::errorCode` and `failed`; worker threads still participate in barriers to avoid deadlock. After `waitForJob`, call `getJobError(job)` — never `exit()` from the library.
+Failures set `JobFramework::errorCode` and `failed`; worker threads still participate in barriers. After `waitForJob`, call `getJobError(job)`.
 
 ## Memory ownership
 
 - **Input** — owned by caller; must outlive the job.
-- **emit2 pairs** — owned by the client until deleted in `reduce` (typical pattern).
+- **emit2 pairs** — owned by the client until deleted in `reduce`.
 - **emit3 pairs** — owned by caller after job completion.

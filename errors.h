@@ -1,8 +1,0 @@
-#define BAD_ALLOCATION "system error: bad allocation\n"
-#define THREAD_CREATION_ERROR "system error: failed to create threads\n"
-#define SORT_ERROR "system error: sort operation failed\n"
-#define BARRIER_ERROR "system error: barrier synchronization failed\n"
-#define STATE_UPDATE_ERROR "system error: state update failed\n"
-#define SHUFFLE_ERROR "system error: shuffle operation failed\n"
-#define VECTOR_OPERATION_ERROR "system error: vector operations failed\n"
-#define REDUCE_ERROR "system error: reduce operation failed\n"

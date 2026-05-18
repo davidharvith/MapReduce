@@ -1,0 +1,6 @@
+# Serial shuffle on thread 0 only (pre parallel-shuffle), same machine class
+threads,inputs,time_s,inputs_per_sec
+1,500000,0.133,3.77e+06
+2,500000,0.127,3.92e+06
+4,500000,0.122,4.11e+06
+8,500000,0.148,3.39e+06
