@@ -1,0 +1,15 @@
+#ifndef MAPREDUCE_ERRORS_H
+#define MAPREDUCE_ERRORS_H
+
+enum JobErrorCode : int {
+    JOB_OK = 0,
+    JOB_ERR_BAD_ALLOCATION = 1,
+    JOB_ERR_THREAD_CREATION = 2,
+    JOB_ERR_SORT = 3,
+    JOB_ERR_BARRIER = 4,
+    JOB_ERR_SHUFFLE = 5,
+    JOB_ERR_VECTOR = 6,
+    JOB_ERR_REDUCE = 7,
+};
+
+#endif

@@ -1,44 +1,21 @@
-# Compiler and tools
-CC       = g++
-CXX      = g++
-AR       = ar
-ARFLAGS  = rcs
-RANLIB   = ranlib
+.PHONY: all build test clean bench
 
-# Source and objects
-LIBSRC   = MapReduceFramework.cpp GeneralContext.cpp Barrier.cpp  
-LIBOBJ   = $(LIBSRC:.cpp=.o)
+BUILD_DIR ?= build
 
-# Include paths and flags
-INCS     = -I.
-CFLAGS   = -Wall -Wextra -std=c++20 -g $(INCS)
-CXXFLAGS = -Wall -Wextra -std=c++20 -g $(INCS)
+all: build
 
-# Library name
-OSMLIB   =  libMapReduceFramework.a
+build:
+	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(BUILD_DIR) -j
 
-# Tarball settings
-TAR = tar
-TARNAME  = ex3.tar
-TARFLAGS = -cvf
-TARSRCS = $(LIBSRC) Barrier.h GeneralContext.h errors.h Makefile README
+test: build
+	ctest --test-dir $(BUILD_DIR) --output-on-failure
 
-all: $(OSMLIB)
-
-$(OSMLIB): $(LIBOBJ)
-	$(AR) $(ARFLAGS) $@ $^
-	$(RANLIB) $@
-
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+bench: build
+	./$(BUILD_DIR)/bench --threads 1
+	./$(BUILD_DIR)/bench --threads 2
+	./$(BUILD_DIR)/bench --threads 4
+	./$(BUILD_DIR)/bench --threads 8
 
 clean:
-	rm -f $(OSMLIB) $(LIBOBJ) *~ core
-
-depend:
-	makedepend -- $(CFLAGS) -- $(LIBSRC)
-
-tar:
-	$(TAR) $(TARFLAGS) $(TARNAME) $(TARSRCS)
-
-.PHONY: all clean depend tar
+	rm -rf $(BUILD_DIR)
